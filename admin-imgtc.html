@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="./admin-imgtc.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15.3/lib/theme-chalk/index.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css">
-  <script src="https://js.sentry-cdn.com/219f636ac7bde5edab2c3e16885cb535.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
   <div id="app">
@@ -307,12 +306,9 @@
       filterOption: 'all',
       fileType: 'image',
       quickWebsites: [
-        { name: '原版后台', url: './admin.html', icon: 'fas fa-suitcase' },
+        { name: '新版后台', url: './admin.html', icon: 'fas fa-suitcase' },
+        { name: '旧版列表', url: './admin-legacy.html', icon: 'fas fa-list' },
         { name: '瀑布流', url: './admin-waterfall.html', icon: 'fas fa-wind' },
-        { name: 'Movavi', url: 'https://www.movavi.com/zh/movavi-video-converter.html', icon: 'fas fa-file-video' },
-        { name: 'FreeConvert', url: 'https://www.freeconvert.com/zh/video-compressor', icon: 'fas fa-file' },
-        { name: 'YouCompress', url: 'https://www.youcompress.com/zh-cn/', icon: 'fas fa-file-zipper' },
-        { name: 'Cloudinary', url: 'https://console.cloudinary.com/', icon: 'fas fa-cloud' },
       ],
     },
     computed: {
@@ -721,7 +717,7 @@
 
         let brokenCount = 0;
         const promises = this.tableData.map((item, index) => {
-          const fileIndex = this.tableData.findIndex(item => item.name === this.selectedFiles[index].name);
+          const fileIndex = index;  // 原实现引用 selectedFiles[index]，未选中文件时会报错
           return new Promise((resolve) => {
             fetch(`${this.baseURL}/file/${item.name}`, {
               method: 'HEAD',

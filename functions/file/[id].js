@@ -51,7 +51,8 @@ export async function onRequest(context) {
         return withFileHeaders(response, fileId);
     } else if (isBlocked(metadata)) {
         const referer = request.headers.get('Referer');
-        const redirectUrl = referer ? "https://static-res.pages.dev/teleimage/img-block-compressed.png" : `${url.origin}/block-img.html`;
+        // 外链场景返回本站自带的占位图，不再依赖原作者的外部图片地址
+        const redirectUrl = referer ? `${url.origin}/block-img.svg` : `${url.origin}/block-img.html`;
         return Response.redirect(redirectUrl, 302);
     }
 

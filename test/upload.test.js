@@ -69,6 +69,7 @@ describe('upload function', function () {
     assert.strictEqual(stored.metadata.Label, 'None');
     assert.strictEqual(stored.metadata.fileName, 'cat.png');
     assert.strictEqual(stored.metadata.fileSize, 11);
+    assert.strictEqual(stored.metadata.fileType, 'image/png');
     assert.strictEqual(stored.metadata.liked, false);
     assert.ok(Number.isFinite(stored.metadata.TimeStamp));
   });

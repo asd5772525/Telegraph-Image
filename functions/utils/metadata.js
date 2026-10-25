@@ -31,6 +31,7 @@ export function normalizeMetadata(metadata, id) {
     fileSize: metadata.fileSize || 0,
     ...(metadata.provider ? { provider: metadata.provider } : {}),
     ...(metadata.shortId ? { shortId: metadata.shortId } : {}),
+    ...(metadata.fileType ? { fileType: metadata.fileType } : {}),
   };
 }
 

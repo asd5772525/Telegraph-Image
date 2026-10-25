@@ -1,4 +1,3 @@
-import { errorHandling, telemetryData } from "./utils/middleware.js";
 import { authenticateUploadRequest } from "./utils/auth.js";
 import { jsonResponse } from "./utils/http.js";
 import { createDefaultMetadata, putMetadata } from "./utils/metadata.js";
@@ -20,9 +19,6 @@ export async function onRequestPost(context) {
         const clonedRequest = request.clone();
         const formData = await clonedRequest.formData();
 
-        await errorHandling(context);
-        telemetryData(context);
-
         const uploadFile = formData.get('file');
         if (!uploadFile) {
             throw new Error('No file uploaded');
@@ -43,6 +39,9 @@ export async function onRequestPost(context) {
             await putMetadata(env, longId, createDefaultMetadata(longId, {
                 fileName,
                 fileSize: uploadFile.size,
+                // MIME type lets the dashboard tell videos/images apart without
+                // relying on the extension; additive, older records simply lack it.
+                ...(uploadFile.type ? { fileType: uploadFile.type } : {}),
                 provider: provider.key,
                 ...(shortId ? { shortId } : {}),
             }));
