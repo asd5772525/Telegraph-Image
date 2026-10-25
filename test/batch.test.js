@@ -112,4 +112,16 @@ describe('metadata fileType', function () {
     assert.strictEqual(out.fileType, 'video/mp4');
     assert.strictEqual(normalizeMetadata(meta(), 'a.mp4').fileType, undefined);
   });
+
+  it('normalizeMetadata keeps fileHash for duplicate detection', async function () {
+    const { normalizeMetadata } = await import('../functions/utils/metadata.js');
+    assert.strictEqual(normalizeMetadata(meta({ fileHash: 'abc' }), 'a.png').fileHash, 'abc');
+    assert.strictEqual(normalizeMetadata(meta(), 'a.png').fileHash, undefined);
+  });
+  it('hashFile skips empty input and never throws', async function () {
+    const { hashFile } = await import('../functions/upload.js');
+    assert.strictEqual(await hashFile(null), null);
+    assert.strictEqual(await hashFile(new File([], 'e.txt')), null);
+    assert.strictEqual((await hashFile(new File(['x'], 'x.txt'))).length, 32);
+  });
 });

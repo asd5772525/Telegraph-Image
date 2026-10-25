@@ -70,6 +70,9 @@ describe('upload function', function () {
     assert.strictEqual(stored.metadata.fileName, 'cat.png');
     assert.strictEqual(stored.metadata.fileSize, 11);
     assert.strictEqual(stored.metadata.fileType, 'image/png');
+    // sha256('image-bytes') 前 16 字节
+    const crypto = require('crypto');
+    assert.strictEqual(stored.metadata.fileHash, crypto.createHash('sha256').update('image-bytes').digest('hex').slice(0, 32));
     assert.strictEqual(stored.metadata.liked, false);
     assert.ok(Number.isFinite(stored.metadata.TimeStamp));
   });

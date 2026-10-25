@@ -5,6 +5,20 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="免费图床，基于 Cloudflare Pages 的图片上传工具">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="theme-color" content="#1b2440">
+<script>
+  // 后台“外观设置”里选的主题色（同一浏览器共享）
+  (function () {
+    var a = localStorage.getItem('ti-accent');
+    if (a && /^#[0-9a-f]{6}$/i.test(a)) {
+      var st = document.documentElement.style;
+      st.setProperty('--accent', a);
+      st.setProperty('--accent-soft', 'color-mix(in srgb, ' + a + ' 12%, transparent)');
+    }
+  })();
+</script>
 <title>Telegraph-Image | 免费图床</title>
 <style>
 /* Design tokens carried over from the original Nuxt homepage so the look stays
@@ -268,7 +282,7 @@ footer a:hover { opacity: .75; }
 .uploader.dragover::after, .uploader.drag::after, .uploader.is-dragging::after { border-color: rgba(37, 137, 255, .7); background: rgba(37, 137, 255, .05); }
 .uploader:hover .ring { transform: translateY(-3px); }
 .ring { transition: transform .25s; }
-#pick { background: linear-gradient(135deg, #2f8cff, #6a5cff); box-shadow: 0 10px 24px -8px rgba(76, 110, 255, .7); padding-left: 24px; padding-right: 24px; }
+#pick { background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 50%, #7c4dff)); box-shadow: 0 10px 24px -8px rgba(76, 110, 255, .7); padding-left: 24px; padding-right: 24px; }
 #pick:hover { box-shadow: 0 14px 28px -8px rgba(76, 110, 255, .85); filter: brightness(1.05); }
 .results .head { padding: 15px 18px; }
 .results .head h2 { font-size: 13px; }
@@ -285,6 +299,12 @@ footer { opacity: .85; }
   .tagline { margin-bottom: 14px; }
   .card { border-radius: 16px; }
 }
+
+/* ---- v3：上传速度、重试、历史 ---- */
+.item .retry { flex: none; height: 24px; padding: 0 9px; border-radius: 7px; border: 1px solid var(--line); background: transparent; color: var(--accent); font-size: 11px; cursor: pointer; }
+.item .retry:hover { background: var(--accent-soft); }
+.item.history .name::after { content: '历史'; margin-left: 6px; font-size: 10px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.item img.thumb { opacity: 0; transition: opacity .3s; } .item img.thumb.ld { opacity: 1; }
 
 /* ---- dark mode (follows the system setting) ---- */
 @media (prefers-color-scheme: dark) {
@@ -394,6 +414,8 @@ footer { opacity: .85; }
   // Mirrors the original homepage: five Bing pictures cross-fading on a 30s
   // cycle, 6s apart. Any failure leaves the CSS gradient in place.
   (function loadWallpapers() {
+    var localBg = localStorage.getItem('ti-front-bg');
+    if (localBg === 'gradient' || (localBg === 'custom' && localStorage.getItem('ti-front-bg-url'))) return;
     fetch('/api/bing/wallpaper').then(function (res) {
       if (!res.ok) throw new Error('wallpaper unavailable');
       return res.json();
@@ -534,7 +556,7 @@ footer { opacity: .85; }
       thumb.className = 'thumb';
       thumb.alt = '';
       thumb.src = URL.createObjectURL(file);
-      thumb.onload = function () { URL.revokeObjectURL(thumb.src); };
+      thumb.onload = function () { URL.revokeObjectURL(thumb.src); thumb.classList.add('ld'); };
     } else {
       thumb = document.createElement('div');
       thumb.className = 'thumb';
@@ -571,11 +593,15 @@ footer { opacity: .85; }
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '/upload');
 
+    var started = Date.now();
     xhr.upload.onprogress = function (event) {
       if (event.lengthComputable) {
         var percent = Math.round(event.loaded / event.total * 100);
+        var secs = (Date.now() - started) / 1000, speed = secs > 0.3 ? event.loaded / secs : 0;
+        var left = speed ? (event.total - event.loaded) / speed : 0;
         item.bar.style.width = percent + '%';
-        item.meta.textContent = formatSize(file.size) + ' · 上传中 ' + percent + '%';
+        item.meta.textContent = formatSize(file.size) + ' · ' + (percent >= 100 ? '处理中…' : '上传中 ' + percent + '%' +
+          (speed ? ' · ' + formatSize(Math.round(speed)) + '/s' + (left > 1 ? ' · 剩余 ' + formatDuration(left) : '') : ''));
       }
     };
 
@@ -614,6 +640,7 @@ footer { opacity: .85; }
   function finishItem(item, file, src) {
     var fullUrl = location.origin + src;
     uploaded.push({ url: fullUrl, fileName: file.name, type: file.type });
+    saveHistory({ url: fullUrl, fileName: file.name, type: file.type, size: file.size, time: Date.now() });
 
     item.root.classList.add('done');
     item.bar.style.width = '100%';
@@ -644,6 +671,15 @@ footer { opacity: .85; }
     item.bar.style.width = '100%';
     item.meta.className = 'meta error';
     item.meta.textContent = '上传失败：' + message;
+    var retry = document.createElement('button');
+    retry.type = 'button'; retry.className = 'retry'; retry.textContent = '重试';
+    retry.addEventListener('click', function () {
+      retry.remove();
+      item.root.classList.remove('error'); item.meta.className = 'meta'; item.bar.style.width = '0';
+      item.meta.textContent = formatSize(file.size) + ' · 等待上传…';
+      pending.push({ file: file, item: item }); pumpQueue();
+    });
+    item.root.appendChild(retry);
   }
 
   // ---- link formats ----
@@ -706,6 +742,7 @@ footer { opacity: .85; }
   document.getElementById('clear-all').addEventListener('click', function () {
     uploaded = [];
     queue.textContent = '';
+    try { localStorage.removeItem(HISTORY_KEY); } catch (e) {}
     updateCount();
     renderOutput();
   });
@@ -738,6 +775,70 @@ footer { opacity: .85; }
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 1800);
   }
+
+  function formatDuration(sec) {
+    sec = Math.round(sec);
+    return sec < 60 ? sec + ' 秒' : Math.floor(sec / 60) + ' 分 ' + (sec % 60) + ' 秒';
+  }
+
+  // ---- 本地上传记录（只保存在当前浏览器，最多 100 条） ----
+  var HISTORY_KEY = 'ti-upload-history';
+  function readHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch (e) { return []; } }
+  function saveHistory(entry) {
+    try {
+      var list = readHistory().filter(function (x) { return x.url !== entry.url; });
+      list.unshift(entry);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 100)));
+    } catch (e) {}
+  }
+  (function restoreHistory() {
+    var list = readHistory();
+    if (!list.length) return;
+    list = list.slice().reverse();   // 旧的在上，新上传的接在下面
+    list.forEach(function (entry) {
+      uploaded.push({ url: entry.url, fileName: entry.fileName, type: entry.type });
+    });
+    list.forEach(function (entry) {
+      var row = document.createElement('div');
+      row.className = 'item done history';
+      var thumb;
+      if (kindOf(entry) === 'image') {
+        thumb = document.createElement('img'); thumb.className = 'thumb'; thumb.alt = ''; thumb.loading = 'lazy';
+        thumb.onload = thumb.onerror = function () { thumb.classList.add('ld'); };
+        thumb.src = entry.url;
+      } else {
+        thumb = document.createElement('div'); thumb.className = 'thumb';
+        thumb.textContent = { video: '🎬', audio: '🎵' }[kindOf(entry)] || '📄';
+      }
+      var info = document.createElement('div'); info.className = 'info';
+      var name = document.createElement('div'); name.className = 'name'; name.textContent = entry.fileName;
+      var meta = document.createElement('div'); meta.className = 'meta';
+      var d = new Date(entry.time || Date.now());
+      meta.textContent = (entry.size ? formatSize(entry.size) + ' · ' : '') + (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+      info.appendChild(name); info.appendChild(meta);
+      var copyButton = document.createElement('button');
+      copyButton.type = 'button'; copyButton.className = 'copy-one'; copyButton.title = '复制链接'; copyButton.innerHTML = COPY_ICON;
+      copyButton.addEventListener('click', function () { copyText(formatLink(entry, currentFormat)); });
+      row.appendChild(thumb); row.appendChild(info); row.appendChild(copyButton);
+      queue.appendChild(row);
+    });
+    updateCount();
+    renderOutput();
+  })();
+
+  // ---- 后台“外观设置”里选的上传页背景 ----
+  (function applyFrontBackground() {
+    var mode = localStorage.getItem('ti-front-bg'), url = localStorage.getItem('ti-front-bg-url');
+    var backdrop = document.getElementById('backdrop');
+    if (mode === 'gradient') { backdrop.dataset.local = 'gradient'; backdrop.textContent = ''; }
+    else if (mode === 'custom' && url) {
+      backdrop.dataset.local = 'custom'; backdrop.textContent = '';
+      backdrop.style.backgroundImage = 'url("' + url.replace(/"/g, '%22') + '")';
+      backdrop.style.backgroundSize = 'cover'; backdrop.style.backgroundPosition = 'center';
+    }
+  })();
+
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(function () {});
 
   function formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';

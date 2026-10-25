@@ -27,6 +27,9 @@ export async function onRequestPost(context) {
         const fileName = uploadFile.name;
         const fileExtension = fileName.split('.').pop().toLowerCase();
 
+        // 内容哈希（SHA-256 前 32 位十六进制），供后台查找重复文件；失败不影响上传
+        const fileHash = await hashFile(uploadFile);
+
         const longId = await provider.upload(env, uploadFile, { fileName, fileExtension });
         let shortId = null;
 
@@ -43,6 +46,7 @@ export async function onRequestPost(context) {
                 // relying on the extension; additive, older records simply lack it.
                 ...(uploadFile.type ? { fileType: uploadFile.type } : {}),
                 provider: provider.key,
+                ...(fileHash ? { fileHash } : {}),
                 ...(shortId ? { shortId } : {}),
             }));
 
@@ -55,5 +59,18 @@ export async function onRequestPost(context) {
     } catch (error) {
         console.error('Upload error:', error);
         return jsonResponse({ error: error.message }, { status: 500 });
+    }
+}
+
+const HASH_MAX_BYTES = 100 * 1024 * 1024;
+
+export async function hashFile(file) {
+    try {
+        if (!file || typeof file.arrayBuffer !== 'function' || !(file.size > 0) || file.size > HASH_MAX_BYTES) return null;
+        if (!globalThis.crypto || !crypto.subtle) return null;
+        const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+        return Array.from(new Uint8Array(digest).slice(0, 16), (b) => b.toString(16).padStart(2, '0')).join('');
+    } catch (error) {
+        return null;
     }
 }
